@@ -1,0 +1,1 @@
+This is an app for checking whether a file is a duplicate or not in a given root directory.
