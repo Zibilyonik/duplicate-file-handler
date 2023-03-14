@@ -1,16 +1,25 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type File struct {
 	path string
 	name string
 	size int
+}
+
+func readLine() string {
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	return strings.TrimSpace(line)
 }
 
 func dirSearch(arg string, format string, option int) []File {
@@ -21,8 +30,10 @@ func dirSearch(arg string, format string, option int) []File {
 			return nil
 		}
 		if !info.IsDir() {
-			if filepath.Ext(path) == format {
-				files = append(files, File{path, info.Name(), int(info.Size())})
+			if format == "" {
+				files = append(files, File{strings.SplitN(path, string(os.PathSeparator), 2)[1], info.Name(), int(info.Size())})
+			} else if strings.Trim(filepath.Ext(path), ".") == format {
+				files = append(files, File{strings.SplitN(path, string(os.PathSeparator), 2)[1], info.Name(), int(info.Size())})
 			}
 		}
 		return nil
@@ -35,7 +46,7 @@ func dirSearch(arg string, format string, option int) []File {
 }
 
 func sortFiles(files []File, option int) []File {
-	if option == 1 {
+	if option == 2 {
 		sort.Slice(files, func(i, j int) bool {
 			return files[i].size < files[j].size
 		})
@@ -47,20 +58,33 @@ func sortFiles(files []File, option int) []File {
 	return files
 }
 
-var options = []string{"Ascending", "Descending"}
+func filePrinter(files []File) {
+	size := 0
+	for _, v := range files {
+		if v.size == size {
+			fmt.Println(v.path)
+		} else {
+			fmt.Printf("\n%d bytes\n\n", v.size)
+			fmt.Println(v.path)
+			size = v.size
+		}
+	}
+}
+
+var options = []string{"Descending", "Ascending"}
 
 func optionSetter(options []string) (string, int) {
 	var format string
 	var option int
 	var correct = false
 	fmt.Println("Enter file format:")
-	fmt.Scan(&format)
+	format = readLine()
 	fmt.Println("Size sorting options:")
 	for i, v := range options {
 		fmt.Println(i+1, v)
 	}
 	for !correct {
-		fmt.Scan(&option)
+		option, _ = strconv.Atoi(readLine())
 		if option > len(options) || option < 1 {
 			fmt.Println("Wrong option")
 		} else {
@@ -71,7 +95,6 @@ func optionSetter(options []string) (string, int) {
 }
 
 func main() {
-	var size = 0
 	if len(os.Args) < 2 {
 		fmt.Println("Directory is not specified")
 		return
@@ -79,14 +102,6 @@ func main() {
 		format, option := optionSetter(options)
 		files := dirSearch(os.Args[1], format, option)
 		files = sortFiles(files, option)
-		for _, v := range files {
-			if v.size == size {
-				fmt.Println(v.name, "(", v.size, "b )")
-			} else {
-				fmt.Printf("%d\n", v.size)
-				fmt.Println(v.path, v.name)
-				size = v.size
-			}
-		}
+		filePrinter(files)
 	}
 }
