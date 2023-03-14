@@ -22,8 +22,8 @@ func readLine() string {
 	return strings.TrimSpace(line)
 }
 
-func dirSearch(arg string, format string, option int) []File {
-	var files []File
+func dirSearch(arg string, format string, option int) map[int][]File {
+	filesList := make(map[int][]File)
 	err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Println("Directory is not specified")
@@ -31,9 +31,9 @@ func dirSearch(arg string, format string, option int) []File {
 		}
 		if !info.IsDir() {
 			if format == "" {
-				files = append(files, File{strings.SplitN(path, string(os.PathSeparator), 2)[1], info.Name(), int(info.Size())})
+				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size())})
 			} else if strings.Trim(filepath.Ext(path), ".") == format {
-				files = append(files, File{strings.SplitN(path, string(os.PathSeparator), 2)[1], info.Name(), int(info.Size())})
+				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size())})
 			}
 		}
 		return nil
@@ -42,31 +42,33 @@ func dirSearch(arg string, format string, option int) []File {
 		fmt.Println("Error: ", err)
 		return nil
 	}
-	return files
+	return filesList
 }
 
-func sortFiles(files []File, option int) []File {
+func sortFiles(files map[int][]File, option int) (map[int][]File, []int) {
+	keys := make([]int, 0, len(files))
+
+	for k := range files {
+		keys = append(keys, k)
+	}
 	if option == 2 {
-		sort.Slice(files, func(i, j int) bool {
-			return files[i].size < files[j].size
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i] < keys[j]
 		})
 	} else {
-		sort.Slice(files, func(i, j int) bool {
-			return files[i].size > files[j].size
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i] > keys[j]
 		})
 	}
-	return files
+	return files, keys
 }
 
-func filePrinter(files []File) {
-	size := 0
-	for _, v := range files {
-		if v.size == size {
+func filePrinter(files map[int][]File, option int) {
+	files, keys := sortFiles(files, option)
+	for _, k := range keys {
+		fmt.Printf("\n%d bytes\n", k)
+		for _, v := range files[k] {
 			fmt.Println(v.path)
-		} else {
-			fmt.Printf("\n%d bytes\n\n", v.size)
-			fmt.Println(v.path)
-			size = v.size
 		}
 	}
 }
@@ -95,13 +97,13 @@ func optionSetter(options []string) (string, int) {
 }
 
 func main() {
+	filesList := make(map[int][]File)
 	if len(os.Args) < 2 {
 		fmt.Println("Directory is not specified")
 		return
 	} else {
 		format, option := optionSetter(options)
-		files := dirSearch(os.Args[1], format, option)
-		files = sortFiles(files, option)
-		filePrinter(files)
+		filesList = dirSearch(os.Args[1], format, option)
+		filePrinter(filesList, option)
 	}
 }
