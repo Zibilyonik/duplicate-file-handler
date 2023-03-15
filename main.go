@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,6 +44,40 @@ func dirSearch(arg string, format string, option int) map[int][]File {
 		return nil
 	}
 	return filesList
+}
+
+func md5sum(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return ""
+	}
+	defer file.Close()
+	hash := md5.New()
+	if _, err := hash.Write([]byte(file.Name())); err != nil {
+		fmt.Println("Error: ", err)
+		return ""
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+func checkDuplicates(files map[int][]File) {
+	var count int
+	for _, v := range files {
+		if len(v) > 1 {
+			for i := 0; i < len(v); i++ {
+				for j := i + 1; j < len(v); j++ {
+					if md5sum(v[i].path) == md5sum(v[j].path) {
+						fmt.Printf("%d bytes\n", v[i].size)
+						fmt.Printf("Hash: %s\n", md5sum(v[i].path))
+						fmt.Printf("%d. %s\n", count, v[i].path)
+						fmt.Printf("%d. %s\n", count+1, v[j].path)
+						count += 2
+					}
+				}
+			}
+		}
+	}
 }
 
 func sortFiles(files map[int][]File, option int) (map[int][]File, []int) {
@@ -105,5 +140,17 @@ func main() {
 		format, option := optionSetter(options)
 		filesList = dirSearch(os.Args[1], format, option)
 		filePrinter(filesList, option)
+		fmt.Println("Check for duplicates?")
+		for {
+			var input = readLine()
+			if input == "yes" {
+				checkDuplicates(filesList)
+				return
+			} else if input == "no" {
+				return
+			} else {
+				fmt.Println("Wrong option")
+			}
+		}
 	}
 }
