@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -54,7 +55,7 @@ func md5sum(path string) string {
 	}
 	defer file.Close()
 	hash := md5.New()
-	if _, err := hash.Write([]byte(file.Name())); err != nil {
+	if _, err := io.Copy(hash, file); err != nil {
 		fmt.Println("Error: ", err)
 		return ""
 	}
@@ -62,19 +63,22 @@ func md5sum(path string) string {
 }
 
 func checkDuplicates(files map[int][]File) {
-	var count int
+	var count = 1
+	var duplicates = make(map[string][]File)
 	for _, v := range files {
 		if len(v) > 1 {
 			for i := 0; i < len(v); i++ {
-				for j := i + 1; j < len(v); j++ {
-					if md5sum(v[i].path) == md5sum(v[j].path) {
-						fmt.Printf("%d bytes\n", v[i].size)
-						fmt.Printf("Hash: %s\n", md5sum(v[i].path))
-						fmt.Printf("%d. %s\n", count, v[i].path)
-						fmt.Printf("%d. %s\n", count+1, v[j].path)
-						count += 2
-					}
-				}
+				duplicates[md5sum(v[i].path)] = append(duplicates[md5sum(v[i].path)], v[i])
+			}
+		}
+	}
+	for _, v := range duplicates {
+		if len(v) > 1 {
+			fmt.Printf("%d bytes\n", v[0].size)
+			fmt.Printf("Hash: %s\n", md5sum(v[0].path))
+			for _, v := range v {
+				fmt.Printf("%d. %s\n", count, v.path)
+				count++
 			}
 		}
 	}
