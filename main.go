@@ -13,9 +13,10 @@ import (
 )
 
 type File struct {
-	path string
-	name string
-	size int
+	path  string
+	name  string
+	size  int
+	order int
 }
 
 func readLine() string {
@@ -33,9 +34,9 @@ func dirSearch(arg string, format string, option int) map[int][]File {
 		}
 		if !info.IsDir() {
 			if format == "" {
-				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size())})
+				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size()), 0})
 			} else if strings.Trim(filepath.Ext(path), ".") == format {
-				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size())})
+				filesList[int(info.Size())] = append(filesList[int(info.Size())], File{path, info.Name(), int(info.Size()), 0})
 			}
 		}
 		return nil
@@ -62,26 +63,84 @@ func md5sum(path string) string {
 	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
-func checkDuplicates(files map[int][]File) {
+func checkDuplicates(files map[int][]File, option int) map[int]File {
 	var count = 1
-	var duplicates = make(map[string][]File)
+	duplicates := map[int]map[string][]File{}
 	for _, v := range files {
-		if len(v) > 1 {
-			for i := 0; i < len(v); i++ {
-				duplicates[md5sum(v[i].path)] = append(duplicates[md5sum(v[i].path)], v[i])
+		for _, v1 := range v {
+			if _, ok := duplicates[v1.size]; !ok {
+				duplicates[v1.size] = map[string][]File{}
+			}
+			duplicates[v1.size][md5sum(v1.path)] = append(duplicates[v1.size][md5sum(v1.path)], v1)
+		}
+	}
+	var sorted = make([]int, 0, len(duplicates))
+	for k := range duplicates {
+		sorted = append(sorted, k)
+	}
+	if option == 2 {
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i] < sorted[j]
+		})
+	} else if option == 1 {
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i] > sorted[j]
+		})
+	}
+	var filesMap = make(map[int]File)
+	for sortedCount := 0; sortedCount < len(sorted); {
+		fmt.Printf("\n%d bytes\n", sorted[sortedCount])
+		for hash, v1 := range duplicates[sorted[sortedCount]] {
+			if len(v1) > 1 {
+				fmt.Printf("Hash: %s\n", hash)
+				for _, v2 := range v1 {
+					v2.order = count
+					filesMap[count] = v2
+					fmt.Printf("%d. %s\n", count, v2.path)
+					count++
+				}
+			}
+		}
+		sortedCount++
+	}
+	return filesMap
+}
+
+func deleteFile(path string) {
+	err := os.Remove(path)
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+}
+
+func deleteDuplicates(files map[int]File) {
+	var list []int
+	var correct = false
+	var totalSize = 0
+	for !correct {
+		fmt.Println("Enter file numbers to remove:")
+		listString := strings.Split(readLine(), " ")
+		for _, v := range listString {
+			num, _ := strconv.Atoi(v)
+			if num > len(files) || num < 1 {
+				fmt.Println("Wrong option")
+				break
+			} else {
+				list = append(list, num)
+				correct = true
 			}
 		}
 	}
-	for _, v := range duplicates {
-		if len(v) > 1 {
-			fmt.Printf("%d bytes\n", v[0].size)
-			fmt.Printf("Hash: %s\n", md5sum(v[0].path))
-			for _, v := range v {
-				fmt.Printf("%d. %s\n", count, v.path)
-				count++
+	for _, v := range list {
+		for _, v1 := range files {
+			if v1.order == v {
+				totalSize += v1.size
+				deleteFile(v1.path)
+				delete(files, v)
 			}
 		}
 	}
+	fmt.Printf("Total freed up space: %d bytes", totalSize)
 }
 
 func sortFiles(files map[int][]File, option int) (map[int][]File, []int) {
@@ -145,16 +204,18 @@ func main() {
 		filesList = dirSearch(os.Args[1], format, option)
 		filePrinter(filesList, option)
 		fmt.Println("Check for duplicates?")
+		var filesMap map[int]File
 		for {
 			var input = readLine()
 			if input == "yes" {
-				checkDuplicates(filesList)
-				return
+				filesMap = checkDuplicates(filesList, option)
+				break
 			} else if input == "no" {
 				return
 			} else {
 				fmt.Println("Wrong option")
 			}
 		}
+		deleteDuplicates(filesMap)
 	}
 }
